@@ -1,0 +1,619 @@
+Pacman Protocol Specification
+=============================
+
+Terminology
+===========
+
+This specification uses the terms MUST, SHOULD, and MAY as defined in
+RFC 2119 [rfc2119].
+
+This specification uses the following terminology to distinguish between 
+visiting pacman and various game objects:
+    1.LOCAL: the game object is a local game object, and is currently on 
+      the local screen.
+    2.AWAY: our pacman is current away on the remote screen.
+    3.REMOTE: a game object on the remote screen that our AWAY pacman
+      might interact with.
+    3.FOREIGN: the other player’s pacman, when it is visiting our screen.
+
+The Pacman protocol runs over TCP, using a well known port of 9872.
+There are thirteen types of messages to be sent:
+    1. MAZE_UPDATE
+    2. PACMAN_ARRIVED 
+    3. FOREIGN_PACMAN_LEFT
+    4. PACMAN_DIED
+    5. PACMAN_GO_HOME
+    6. PACMAN_UPDATE
+    7. GHOST_UPDATE
+    8. GHOST_WAS_EATEN 
+    9. FOREIGN_PACMAN_ATE_GHOST
+    10. EAT
+    11. SCORE_UPDATE
+    12. LIVES_UPDATE
+    13. STATUS_UPDATE
+
+When the game starts, a successful connection will be established between the local computer and
+the remote computer. This SHOULD only happen upon completion of a successful handshake. To
+do so, a password of type string with a maximum character limit of 10 MUST be set. After setting 
+the password, the players SHOULD enter it in the terminal by inserting the password using the 
+'-p' flag. When a connection has been established, a MAZE_UPDATE message MUST be sent
+to both the players. This done to ensure that the players are able to see both their own and
+their opponent's maze. Mazes MAY be chosen by inserting '-m' in the terminal at the start of
+the game. If no maze is chosen a random maze will be assigned. To secure our game from malicious
+input the protocol MUST handle security checks, which discards irrelevant data
+that MAY damage the program. 
+
+Every time a player clears  a level, their computer sends a MAZE_UPDATE
+message. The other computer receives this and used it to update the
+display of the remote maze.
+
+When LOCAL pacman visits the remote screen and it becomes an AWAY pacman, the 
+local computer MUST send a PACMAN_ARRIVED message to the remote computer.
+
+If the AWAY pacman has traversed the tunnel again and is now LOCAL, 
+the local computer MUST send a FOREIGN_PACMAN_LEFT message.
+
+If the FOREIGN pacman dies in the LOCAL maze, the local computer MUST
+send a PACMAN_DIED message to the remote computer.
+
+Everytime a player's pacman moves their computer MUST send a PACMAN_UPDATE 
+message. The remote computer uses it to update the position of the pacman on 
+the opponent display.
+
+Everytime a ghost moves the local computer MUST send a GHOST_UPDATE 
+message to the remote computer. The remote computer uses it to update the 
+position of the ghost on the opponent display.
+
+Whenever a LOCAL ghost is eaten by the LOCAL pacman a GHOST_EATEN message MUST 
+be sent by the local computer to the remote computer. If the LOCALnghost was 
+eaten by a foreign pacman, a FOREIGN_PACMAN_ATE_GHOST message must be sent.
+
+When the AWAY pacman has to be forced to be sent to the LOCAL maze, 
+a PACMAN_GO_HOME message MUST be sent by the remote computer to local computer.
+
+Whenever the pacman, LOCAL or AWAY, eats food or powerpills, the local computer MUST 
+send an EAT update message to the remote computer informing it that food or a 
+powerpill has been eaten.
+
+Whenever the LOCAL pacman’s score changes, whether our pacman is LOCAL or
+AWAY, the LOCAL computer MUST send a SCORE_UPDATE message to the remote computer.
+
+Everytime the pacman dies, wheter it's LOCAL or AWAY, the local computer must send a 
+LIVES_UPDATE message to the remote computer.
+
+The local game board also has states associated with it, these are defined in the 
+pa model.py. Changes between these states are communicated using the STATUS_UPDATE 
+message. A STATUS_UPDATE message MUST be sent when there is a change in state.
+There are 6 states: 
+    1.STARTUP
+    2.CHASE
+    3.FRIGHTEN
+    4.GAME OVER
+    5.NEXT LEVEL WAIT
+    6.READY TO RESTART
+
+When we start the game, the software is in STARTUP state while playing the 
+startup jingle. This game has two states : CHASE and FRIGHTEN state.
+If a player loses their last life, the game ends. The player who lost 
+their last life, their computer goes to GAME OVER state, and MUST sends a 
+STATUS_UPDATE message. The remote computer also moves to GAME OVER state.
+
+When on GAME OVER state, if LOCAL player presses “r” to restart the game, 
+the LOCAL computer goes to READY TO RESTART state and MUST send a STATUS_UPDATE 
+message. The game restarts when the second player also presses “r”, and 
+MUST send a replying “READY TO RESTART” STATUS_UPDATE message.
+
+When a level is cleared on a screen,
+the screen's system goes to NEXT LEVEL WAIT while playing the jingle and waiting 
+for the player to get ready.
+
+how it will connect the players
+
+Message Contents
+================
+
+Content of MAZE_UPDATE message:
+-------------------------------
+ 1. Type: MAZE_UPDATE
+
+ 2. Maze: Shape of the maze in binary, which includes walls, food, etc. 
+          The different type of characters are encoded as:
+           " /-" = 0, "-/ " = 1, "-\\" = 2, "\\-" = 3, "---" = 4, 
+           " | " = 5, "   " = 6, " . " = 7, " * " = 8, "###" = 9, 
+           " A " = 10, " B " = 11.
+
+	 
+
+Content of PACMAN_ARRIVED message:
+----------------------------------
+ 1. Type: PACMAN_ARRIVED
+ 2. HAS_ARRIVED : An integer 1 is sent to indicate that the pacman has arrived at 
+                  the remote computer. Otherwise, an integer 0 is sent to the remote 
+                  computer if the pacman has not arrived. 
+ 3. SIDE : It contains the side if the maze the pacman will be arriving in. An integer 
+           1 is sent is it is arriving on side "A" and 0 is sent if it is arriving on 
+           side "B".
+           
+
+Content of FOREIGN_PACMAN_LEFT message:
+---------------------------------------
+ 1. Type: FOREIGN_PACMAN_LEFT
+ 2. HAS_LEFT: If the FOREIGN Pacman has left the LOCAL maze then an integer 1 is sent. 
+              Otherwise, an integer 0 is sent to the local computer.
+
+Content of PACMAN_DIED message:
+---------------------------------------
+ 1. Type: PACMAN_DIED
+ 2. HAS_DIED: An integer 1 is sent if FOREIGN pacman dies in LOCAL maze. 
+              Otherwise if LOCAL pacman dies in LOCAL maze then, integer 0 
+              is sent to the remote computer.
+
+Content of PACMAN_GO_HOME message:
+----------------------------------
+1. Type: PACMAN_GO_HOME
+2. GO_HOME: An integer 1 is sent if the AWAY pacman has to be forcibly sent to LOCAL 
+            maze. Otherwise integer 0 is sent to the remote computer.
+
+Content of PACMAN_UPDATE message:
+---------------------------------
+1. Type: PACMAN_UPDATE
+2. POSITION: It containes the X, Y position of the pacman as an integer in the 
+             range 0 to 1023. X is distance along the screen from 0 to 1023 as 
+             the pacman moves from left to right on the LOCAL player's screen. 
+             0 is the left of LOCAL player's screen and 1023 is the right of 
+             the screen. Y is the distance down the screen from 0 to 1023, 
+             where 0 is the top of LOCAL player's screen and 1023 is the bottom.
+
+3. DIRECTION There are 4 directions for the pacman. They are represented as
+             UP = 0, LEFT = 1, RIGHT = 2 and DOWN = 3.
+
+4. SPEED: The speed of the pacman remains constant at 80 pixels per second, which 
+         is roughly 10 tiles per second. if the pacman is moving then we send an 
+         integer 1. Otherwise we send an integer 0.
+
+Content of GHOST_UPDATE message:
+---------------------------------
+1. Type: GHOST_UPDATE
+2. POSITION: It containes the X, Y position of the ghosts as an integer in the 
+             range 0 to 1023. X is distance along the screen from 0 to 1024 as 
+             the ghosts moves from left to right on the LOCAL player's screen. 
+             0 is the left of LOCAL player's screen and 1023 is the right of 
+             the screen. Y is the distance down the screen from 0 to 1023, 
+             where 0 is the top of LOCAL player's screen and 1023 is the bottom.
+
+3. DIRECTION There are 4 directions for the ghosts. They are represented as
+             UP = 0, LEFT = 1, RIGHT = 2 and DOWN = 3.
+
+4. SPEED: The speed of the ghosts remains constant at 80 pixels per second, which 
+         is roughly 10 tiles per second. if the ghosts is moving then we send an 
+         integer 1. Otherwise we send an integer 0.
+
+5. MODE : This contains the current mode of the ghosts in the game as an integer. 
+          They are represented as SCATTER = 0, CHASE = 1, FRIGHTEN = 2, 
+          FRIGHTEN_TRAPPED = 3, EYES = 4.
+
+6. CHOSEN_GHOST: It contains the chosen ghost whose properties are being uodated as an 
+                 integer in the range 0 to 3.
+
+Content of GHOST_WAS_EATEN message:
+---------------------------------
+1. Type: GHOST_WAS_EATEN
+2. GHOST_EATEN : An integer 1 is sent if the LOCAL ghost was eaten by the LOCAL pacman. 
+                 Otherwise integer 0 is sent to the remote computer.
+
+
+Content of FOREIGN_PACMAN_ATE_GHOST message:
+--------------------------------------------
+1. Type: FOREIGN_PACMAN_ATE_GHOST
+2. GHOST_EATEN_BY_FOREIGN_PACMAN : An integer 1 is sent if the LOCAL ghost was eaten 
+                                   by the FOREIGN pacman. Otherwise integer 0 is sent 
+                                   to the remote computer.
+
+Content of EAT message:
+-----------------------
+1. Type: EAT
+2. POSITION: It containes the X, Y position of the ghosts as an integer in the 
+             range 0 to 1023. X is distance along the screen from 0 to 1023 as 
+             the ghosts moves from left to right on the LOCAL player's screen. 
+             0 is the left of LOCAL player's screen and 1023 is the right of 
+             the screen. Y is the distance down the screen from 0 to 1023, 
+             where 0 is the top of LOCAL player's screen and 1023 is the bottom.
+
+3. TYPE_OF_PACMAN: It contains the type of the pacman that ate the food. If the 
+                   LOCAL pacman ate the food then integer 0 is sent, otherwise if
+                   FOREIGN pacman ate the food then integer 1 is sent.
+
+4. FOOD: If the pacman ate normal food, integer 0 is sent to the remote computer. 
+         If the food eaten was a powerpill then an integer 1 is sent.
+
+Content of SCORE_UPDATE message:
+--------------------------------
+1. Type: SCORE_UPDATE
+2. SCORE_UPDATE: Whenever there is a change in the score, the LOCAL computer sends
+                 the integer increase in score to the remote computer.
+3. TYPE_OF_PACMAN: It contains the type of the pacman that ate the food. If the 
+                   LOCAL pacman ate the food then integer 0 is sent, otherwise if
+                   FOREIGN pacman ate the food then integer 1 is sent.
+
+Content of LIVES_UPDATE message:
+--------------------------------
+1. Type: LIVES_UPDATE
+2. LIVES_UPDATE: Whenever there is a change in the number of lives, the LOCAL computer 
+                 sends an integer 1 to the remote computer which then subtracts it 
+                 from the remaining lives.
+
+Content of STATUS_UPDATE message:
+--------------------------------
+1. Type: STATUS_UPDATE
+2.STARTUP: When the game starts the LOCAL computer sends an integer 1 to the remote 
+           computer.
+3.CHASE: When pacman has not eaten any powerpills or the effect of the pills are over,
+         the local computer sends an integer 2 to the remote computer. 
+4.FRIGHTEN: When pacman has eaten a powerpill or the effect of the powerpills are not
+            over, the local computer sends an integer 3 to the remote computer. 
+5.GAME_OVER: When a player loses all their lives, the local computer sends an integer 
+             4 to the remote computer.
+6.NEXT_LEVEL_WAIT: When the LOCAL maze has been cleared, the local computer MUST send
+                   an integer 5 to the remote computer.
+7.READY_TO_RESTART: When on GAME OVER state, if LOCAL player presses “r” to restart 
+                    the game, the LOCAL computer and MUST send the integer 6 to the
+                    remote computer.
+
+Message Timing
+==============
+
+While both pacman and ghost are moving, PACMAN_UPDATE and GHOST_UPDATE messages SHOULD
+be sent every 20 ms as this is the typical reaction time of a human. If a computer
+cannot maintain 50 frames per second, PACMAN_UPDATE and GHOST_UPDATE messages MAY be 
+sent once per frame, as it is unreasonable to update the remote computer
+more often than the local one.
+
+A MAZE_UPDATE message SHOULD be sent only once when a connection is established 
+between the local and remote computers.
+
+SCORE_UPDATE, LIVES_UPDATE and STATUS_UPDATE messages SHOULD be sent every 16.67ms, 
+which translates to roughly 60 frames per second (fps). We use 60 fps because it 
+is the frequency of screen refresh on most displays.
+
+FOREIGN_PACMAN_ARRIVE message SHOULD be sent when the FOREIGN pacman enters the 
+local screen.
+
+FOREIGN_PACMAN_LEFT message SHOULD be sent when the FOREIGN pacman traverses 
+the tunnel to re-enter the remote screen.
+
+PACMAN_DIED message SHOULD be only sent when the FOREIGN pacman dies in 
+the local maze.
+
+PACMAN_GO_HOME message SHOULD be sent when the AWAY pacman has to be resetted back 
+to LOCAL.
+
+EAT message SHOULD be only sent when eihter the LOCAL or FOREIGN pacman consumes 
+any food in the maze.
+
+FOREIGN_PACMAN_ATE_GHOST message SHOULD be sent only when the FOREIGN pacman in 
+the FRIGHTEN state eats a LOCAL ghost.
+
+Message Encoding
+================
+
+The thirteen messages elaborated above are in fixed format, binary encoded, with all 
+integer fields sent in network byte order a big endian order
+ Due to the message 
+type being fixed forward, no explicit length field is required.
+
+More than one message MAY be send consecutively in a single packet - this
+may be useful to reduce overhead when sending PACMAN_UPDATE and
+GHOST_UPDATE, and STATUS_UPDATE and LIVES_UPDATE.
+
+MAZE_UPDATE message format
+---------------------------
+
+MAZE_UPDATE messages consist of 438 bytes and is encoded as follows:
+
+    0                 
+    0 1 2 3 4 5 6 7.....   438
+   +-+-+-+-+-+-+-+-+-+-+.....+
+   |   T   |   Maze     .....|
+   +-+-+-+-+-+-+-+-+-+-+.....+
+
+Fields:
+
+ - T: 4 bit type field. Type=MAZE_UPDATE has decimal value 0.
+
+ - Maze: 438 bytes encoding the shape of the maze.
+
+PACMAN_ARRIVED message format
+-------------------------------------
+
+PACMAN_ARRIVED messages consist of 1 byte and is encoded as follows:
+
+    0                   
+    0 1 2 3 4 5 6 7
+   +-+-+-+-+-+-+-+-+
+   |   T   |H|S| U |
+   +-+-+-+-+-+-+-+-+
+
+Fields:
+
+ - T: 4 bits type field. Type= PACMAN_ARRIVED has decimal value 1.
+
+ - H (HAS_ARRIVED): 1 bit number field which indicates the presence of a FOREIGN pacman in a LOCAL
+	                  maze, giving an unsigned integer in big-endian byte order.
+
+ - S (SIDE): 1 bit number field which indicates which side the pacman will be arriving,giving an 
+            unsigned integer in big-endian byte order.
+
+ - U (UNUSED): 2 bits, not used, but needed to maintain byte alignment. MUST be set to zero in this
+	    version of the protocol.
+
+FOREIGN_PACMAN_LEFT message format
+-----------------------------------
+
+FOREIGN_PACMAN_LEFT messages consist of 1 byte and is encoded as follows:
+
+    0                   
+    0 1 2 3 4 5 6 7
+   +-+-+-+-+-+-+-+-+
+   |   T   |H|  U  |
+   +-+-+-+-+-+-+-+-+
+
+Fields:
+
+ - T: 4 bits type field. Type=FOREIGN_PACMAN_LEFT has decimal value 2.
+
+ - H (HAS_LEFT): 1 bit number field which indicates if a FOREIGN pacman has left a LOCAL
+	               maze, giving an unsigned integer in big-endian byte order.
+
+ - U (UNUSED): 3 bits, not used, but needed to maintain byte alignment. MUST be set to zero in this
+	    version of the protocol.
+
+PACMAN_DIED message format
+-----------------------------------
+
+PACMAN_DIED messages consist of 1 byte and is encoded as follows:
+
+    0                   
+    0 1 2 3 4 5 6 7
+   +-+-+-+-+-+-+-+-+
+   |   T   |H|  U  |
+   +-+-+-+-+-+-+-+-+
+
+Fields:
+
+ - T: 4 bits type field. Type=PACMAN_DIED has decimal value 3.
+
+ - H (HAS_DIED): 1 bit number field which indicates if a FOREIGN or LOCAL pacman has died in a LOCAL
+	        maze, giving an unsigned integer in big-endian byte order.
+
+ - U (UNUSED): 3 bits, not used, but needed to maintain byte alignment. MUST be set to zero in this
+	    version of the protocol.
+
+PACMAN_GO_HOME message format
+------------------------------
+
+PACMAN_GO_HOME messages consist of 1 byte and is encoded as follows:
+
+    0                   
+    0 1 2 3 4 5 6 7
+   +-+-+-+-+-+-+-+-+
+   |   T   |G|  U  |
+   +-+-+-+-+-+-+-+-+
+
+Fields:
+
+ - T: 4 bits type field. Type=PACMAN_GO_HOME has decimal value 4.
+
+ - G (GO_HOME): 1 bit number field which indicates that the AWAY pacman has to be forcibly sent 
+                home.
+
+ - U (UNUSED): 3 bits, not used, but needed to maintain byte alignment. MUST be set to zero in this
+	    version of the protocol.
+
+PACMAN_UPDATE message format
+-----------------------------
+
+PACMAN_UPDATE messages consist of 4 bytes and is encoded as follows:
+
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |   T   |     X POSITION    |     Y POSITION    | D | S |   U   |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+Fields:
+
+ - T: 4 bits type field. Type=PACMAN_UPDATE has decimal value 5.
+
+ - X POSITION, Y POSITION: 10 bits number field which contains the x and y coordinates of the
+			                     pacman respectively, giving an unsigned integer in big-endian byte order.
+
+ - D (DIRECTION): 3 bits number field which indicates the direction of the pacman, giving an
+		              unsigned integer in big-endian byte order.
+
+ - S (SPEED): 2 bits number field which indicates if the pacman has stopped or is moving, giving an
+	            unsigned integer in big-endian byte order.
+
+ - U (UNUSED): 3 bits, not used, but needed to maintain byte alignment. MUST be set to zero
+	             in this version of the protocol.
+
+GHOST_UPDATE message format
+----------------------------
+
+GHOST_UPDATE messages consist of 4 bytes and is encoded as follows:
+
+    0                   1                   2                   3                   4
+    0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |   T   |     X POSITION    |     Y POSITION    |     M     | D | S | C |   U   |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+Fields:
+
+ - T: 4 bits type field. Type=GHOST_UPDATE has decimal value 6.
+
+ - X_POSITION, Y_POSITION: 10 bits number field which contains the x and y coordinates of the LOCAL
+			                     ghost respectively, giving an unsigned integer in big-endian byte order.
+
+ - D (DIRECTION): 2 bits number field which indicates the direction of the ghost, giving an
+		              unsigned integer in big-endian byte order.
+
+ - S (SPEED): 3 bits number field which indicates the speed of the ghost, giving an unsigned
+	            integer in big-endian byte order.
+
+ - M (MODE): 6 bits number field which indicates the mode of ghost movements, giving an unsigned
+	           integer in big-endian byte order.
+
+ - C (CHOSEN_GHOST): 2 bit number field which indicates the ghost whose properties are being sent, 
+                     giving an unsigned integer in big-endian byte order.
+
+ - U (UNUSED): 3 bits, not used, but needed to maintain byte alignment. MUST be set to zero
+	             in this version of the protocol.
+
+GHOST_WAS_EATEN message format
+------------------------------
+
+FOREIGN_PACMAN_ATE_GHOST messages consist of 1 byte and is encoded as follows:
+
+    0                   
+    0 1 2 3 4 5 6 7 
+   +-+-+-+-+-+-+-+-+
+   |   T   |L|  U  |
+   +-+-+-+-+-+-+-+-+
+
+Fields:
+
+ - T: 4 bits type field. Type=FOREIGN_PACMAN_ATE_GHOST has decimal value 7.
+
+ - L: 1 bit, indicates if the ghost was eaten by the LOCAL pacman.
+
+ - U (unused): 3 bits, not used, but needed to maintain byte alignment. MUST be set to zero in this
+	       version of the protocol.
+
+FOREIGN_PACMAN_ATE_GHOST message format
+----------------------------------------
+
+FOREIGN_PACMAN_ATE_GHOST messages consist of 1 byte and is encoded as follows:
+
+    0                   
+    0 1 2 3 4 5 6 7 
+   +-+-+-+-+-+-+-+-+
+   |   T   |F|  U  |
+   +-+-+-+-+-+-+-+-+
+
+Fields:
+
+ - T: 4 bits type field. Type=FOREIGN_PACMAN_ATE_GHOST has decimal value 8.
+
+ - F: 1 bit, indicates if the ghost was eaten by the FOREIGN pacman.
+
+ - U (UNUSED): 3 bits, not used, but needed to maintain byte alignment. MUST be set to zero in this
+	       version of the protocol.
+
+
+EAT message format
+-------------------
+
+EAT messages consist of 4 bytes and is encoded as follows:
+
+    0                   1                   2                  3
+    0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |   T   |     X_POSITION    |     Y_POSITION    |     U     |P|F|
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+Fields:
+
+ - T: 4 bits type field. Type=EAT has decimal value 9.
+
+ - X_POSITION, Y_POSITION: 10 bits number field which conatins the x and y position 
+                           of the food respectively, giving an unsigned integer in 
+                           big-endian byte order.
+
+ - P (TYPE_OF_PACMAN): 1 bit number field which indicates if the pacman is a LOCAL or FOREIGN 
+                       pacman, giving an unsigned integer in big-endian byte order.
+
+ - F (Food): 1 bit number field which indicates if the food eaten by the pacman is a 
+             powerpill or not, giving an unsigned integer in big-endian byte order.
+
+ - U (UNUSED): 6 bits, not used, but needed to maintain byte alignment. MUST be set to zero in this
+	             version of the protocol.
+
+SCORE_UPDATE message format
+----------------------------
+
+SCORE_UPDATE messages consist of 4 bytes and is encoded as follows:
+
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |   T   |P|                      U                              |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                            SCORE                              |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+Fields:
+
+ - T: 4 bits type field. Type=SCORE_UPDATE has decimal value 10.
+
+ - SCORE: 32 bit number field which indicates the score of the LOCAL pacman, giving
+		       an unsigned integer in big-endian byte order.
+
+ - P (TYPE_OF_PACMAN): 1 bit number field which indicates if the pacman is a LOCAL or FOREIGN 
+                       pacman, giving an unsigned integer in big-endian byte order.
+
+ - U (UNUSED): 27 bits, not used, but needed to maintain byte alignment. MUST be set to zero in this
+	   version of the protocol.
+
+LIVES_UPDATE message format
+----------------------------
+
+LIVES_UPDATE messages consist of 1 byte and is encoded as follows:
+
+    0                   
+    0 1 2 3 4 5 6 7
+   +-+-+-+-+-+-+-+-+
+   |   T   |  L  |U|
+   +-+-+-+-+-+-+-+-+
+
+Fields:
+
+ - T: 4 bits type field. Type=LIVES_UPDATE has decimal value 11.
+
+ - L (Local): 3 bit number field which indicates the number of lives left for a LOCAL pacman,
+	            giving an unsigned integer in big-endian byte order.
+
+ - U (UNUSED): 1 bit, not used, but needed to maintain byte alignment. MUST be set to zero in this
+	             version of the protocol.
+
+STATUS_UPDATE message format
+-----------------------------
+
+STATUS_UPDATE messages consist of 1 byte and is encoded as follows:
+
+    0                   
+    0 1 2 3 4 5 6 7
+   +-+-+-+-+-+-+-+-+
+   |   T   |  S  |U|
+   +-+-+-+-+-+-+-+-+
+
+Fields:
+
+ - T: 4 bits type field. Type=STATUS_UPDATE has decimal value 12.
+
+ - S : 3 bit number field which indicates the status of the game board, giving an
+		unsigned integer in big-endian byte order.
+
+ - U (UNUSED): 1 bit, not used, but needed to maintain byte alignment. MUST be set to zero in this
+	   version of the protocol.
+
+References
+==========
+M.Handley (2022) 'Pong v1 Protocol Specification' from 
+https://github.com/mhandley/ENGF2-2022/blob/master/video15-pong/pong_v1.txt
+(Accessed: 6 December 2022)
+
+M.Handley (2022) 'assignment.pdf' from 
+https://github.com/mhandley/ENGF2-2022/blob/master/assignments/assignment5/assignment.pdf
+(Accessed: 7 December 2022)
+
+
